@@ -107,43 +107,40 @@
 #>
 
 #Define and validate parameters
-[CmdletBinding(DefaultParameterSetName="All")]
+[CmdletBinding(DefaultParameterSetName = "All")]
 Param(
-      #The target domain
-      [parameter(Mandatory=$True,Position=1)]
-      [ValidateScript({Get-ADDomain $_})] 
-      [String]$Domain,
+    #The target domain
+    [parameter(Mandatory = $True, Position = 1)]
+    [ValidateScript( { Get-ADDomain $_ })] 
+    [String]$Domain,
 
-      #The backup folder
-      [parameter(Mandatory=$True,Position=2)]
-      [ValidateScript({Test-Path $_})]
-      [String]$BackupFolder,
+    #The backup folder
+    [parameter(Mandatory = $True, Position = 2)]
+    [ValidateScript( { Test-Path $_ })]
+    [String]$BackupFolder,
 
-      #Backup GPOs modified within the last X days
-      [parameter(ParameterSetName="Modified",Mandatory=$False,Position=3)]
-      [ValidateSet(15,30,45,60,90)]
-      [Int]$ModifiedDays,
+    #Backup GPOs modified within the last X days
+    [parameter(ParameterSetName = "Modified", Mandatory = $False, Position = 3)]
+    [ValidateSet(15, 30, 45, 60, 90)]
+    [Int]$ModifiedDays,
 
-      #Backup a single GPO
-      [parameter(ParameterSetName="Guid",Mandatory=$False,Position=3)]
-      [ValidateScript({Get-GPO -Guid $_})] 
-      [String]$GpoGuid,
+    #Backup a single GPO
+    [parameter(ParameterSetName = "Guid", Mandatory = $False, Position = 3)]
+    [ValidateScript( { Get-GPO -Guid $_ })] 
+    [String]$GpoGuid,
 
-      #Whether to create a migration table
-      [Switch]$MigTable
-    )
-
+    #Whether to create a migration table
+    [Switch]$MigTable
+)
 
 #Set strict mode to identify typographical errors (uncomment whilst editing script)
 #Set-StrictMode -version Latest
-
 
 ##########################################################################################################
 
 ########
 ## Main
 ########
-
 
 ########################
 ##BACKUP FOLDER DETAILS
@@ -152,8 +149,13 @@ Param(
 $Date = Get-Date
 $ShortDate = Get-Date -format d
 
-$SubBackupFolder = "$BackupFolder\" + `                   "$($Date.Year)_" + `                   "$("{0:D2}" -f $Date.Month)_" + `                   "$("{0:D2}" -f $Date.Day)_" + `                   "$("{0:D2}" -f $Date.Hour)" + `                   "$("{0:D2}" -f $Date.Minute)" + `                   "$("{0:D2}" -f $Date.Second)"
-
+$SubBackupFolder = "$BackupFolder\" + `
+    "$($Date.Year)_" + `
+    "$("{0:D2}" -f $Date.Month)_" + `
+    "$("{0:D2}" -f $Date.Day)_" + `
+    "$("{0:D2}" -f $Date.Hour)" + `
+    "$("{0:D2}" -f $Date.Minute)" + `
+    "$("{0:D2}" -f $Date.Second)"
 
 ##################
 ##BACKUP ALL GPOs
@@ -164,99 +166,84 @@ New-Item -ItemType Directory -Path $SubBackupFolder | Out-Null
 $HtmlReports = "HTML_Reports"
 New-Item -ItemType Directory -Path "$SubBackupFolder\$HtmlReports" | Out-Null
 
-
 #Make sure the backup folders have been created
 if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$HtmlReports")) {
 
     #Connect to the supplied domain
     $TargetDomain = Get-ADDomain -Identity $Domain
     
-
     #Obtain the domain FQDN
     $DomainFQDN = $TargetDomain.DNSRoot
-
 
     #Obtain the domain DN
     $DomainDN = $TargetDomain.DistinguishedName
 
-
     #Connect to the forest root domain
     $TargetForestRootDomain = (Get-ADForest -Server $DomainFQDN).RootDomain | Get-ADDomain
     
-
     #Obtain the forest FQDN
     $ForestFQDN = $TargetForestRootDomain.DNSRoot
 
-
-    #Obtain the forest DN
-    $ForestDN = $TargetForestRootDomain.DistinguishedName    
-
-	
     #Create an empty array for our backups
-	$Backups = @()
+    $Backups = @()
 
-        #Determine the type of backup to be performed
-	    if ($ModifiedDays) {
+    #Determine the type of backup to be performed
+    if ($ModifiedDays) {
 
-            #Get a list of
-		    $ModGpos = Get-GPO -Domain $DomainFQDN -All | Where-Object {$_.ModificationTime -gt $Date.AddDays(-$ModifiedDays)}
+        #Get a list of
+        $ModGpos = Get-GPO -Domain $DomainFQDN -All | Where-Object { $_.ModificationTime -gt $Date.AddDays(-$ModifiedDays) }
             
-            #Loop through each recently changed GPO and back it up, adding the resultant object to the $Backups array
-            foreach ($ModGpo in $ModGpos) {
+        #Loop through each recently changed GPO and back it up, adding the resultant object to the $Backups array
+        foreach ($ModGpo in $ModGpos) {
 
-			    $Backups += Backup-GPO $ModGpo.DisplayName -Path $SubBackupFolder -Comment "Scripted backup created by $env:userdomain\$env:username on $ShortDate"
+            $Backups += Backup-GPO $ModGpo.DisplayName -Path $SubBackupFolder -Comment "Scripted backup created by $env:userdomain\$env:username on $ShortDate"
 		    
 
-            }   #end of foreach ($ModGpo in $ModGpos)
+        }   #end of foreach ($ModGpo in $ModGpos)
 
-	    }   #end of if ($ModifiedDays)
-        elseif ($GpoGuid) {
+    }   #end of if ($ModifiedDays)
+    elseif ($GpoGuid) {
 
-            #Backup single GPO
-             $Backups = Backup-GPO -Guid $GpoGuid -Path $SubBackupFolder -Domain $DomainFQDN -Comment "Scripted backup created by $env:userdomain\$env:username on $ShortDate"
+        #Backup single GPO
+        $Backups = Backup-GPO -Guid $GpoGuid -Path $SubBackupFolder -Domain $DomainFQDN -Comment "Scripted backup created by $env:userdomain\$env:username on $ShortDate"
 
-        }   #end of elseif ($GpoGuid)
-	    else {
+    }   #end of elseif ($GpoGuid)
+    else {
 		    
-		    #Backup all GPOs found in the domain
-            $Backups = Backup-GPO -All -Path $SubBackupFolder -Domain $DomainFQDN -Comment "Scripted backup created by $env:userdomain\$env:username on $ShortDate"
+        #Backup all GPOs found in the domain
+        $Backups = Backup-GPO -All -Path $SubBackupFolder -Domain $DomainFQDN -Comment "Scripted backup created by $env:userdomain\$env:username on $ShortDate"
 
 		    
-	    }   #end of else ($ModifiedDays)
+    }   #end of else ($ModifiedDays)
 
-	
-        #Instantiate an object for Group Policy Management (GPMC required)
-        try {
+    #Instantiate an object for Group Policy Management (GPMC required)
+    try {
 
-            $GPM = New-Object -ComObject GPMgmt.GPM
+        $GPM = New-Object -ComObject GPMgmt.GPM
     
-        }   #end of Try...
+    }   #end of Try...
     
-        catch {
+    catch {
 
-            #Display exit message to console
-            $Message = "ERROR: Unable to connect to GPMC. Please check that it is installed."
-            Write-Host
-            Write-Error $Message
+        #Display exit message to console
+        $Message = "ERROR: Unable to connect to GPMC. Please check that it is installed."
+        Write-Host
+        Write-Error $Message
   
-            #Exit the script
-            exit 1
+        #Exit the script
+        exit 1
     
-        }   #end of Catch...
-
+    }   #end of Catch...
 
     #Import the GPM API constants
     $Constants = $GPM.getConstants()
 
-
     #Connect to the supplied domain
-    $GpmDomain = $GPM.GetDomain($DomainFQDN,$Null,$Constants.UseAnyDc)
-
+    $GpmDomain = $GPM.GetDomain($DomainFQDN, $Null, $Constants.UseAnyDc)
     
     #Connect to the sites container
-    $GpmSites = $GPM.GetSitesContainer($ForestFQDN,$DomainFQDN,$Null,$Constants.UseAnyDc)
+    $GpmSites = $GPM.GetSitesContainer($ForestFQDN, $DomainFQDN, $Null, $Constants.UseAnyDc)
     
-
     ###################################
     ##COLLECT SPECIFIC GPO INFORMATION
     #Loop through each backed-up GPO
@@ -265,14 +252,11 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
         #Get the GPO GUID for our target GPO
         $GpoGuid = $Backup.GpoId
 
-
         #Get the backup GUID for our target GPO
         $BackupGuid = $Backup.Id
         
-
         #Instantiate an object for the relevant GPO using GPM
         $GPO = $GpmDomain.GetGPO("{$GpoGuid}")
-
 
         #Get the GPO DisplayName property
         $GpoName = $GPO.DisplayName
@@ -280,68 +264,59 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
         #Get the GPO ID property
         $GpoID = $GPO.ID
 	
-            
-		##Retrieve SOM Information
-		#Create a GPM search criteria object
-		$GpmSearchCriteria = $GPM.CreateSearchCriteria()
+        ##Retrieve SOM Information
+        #Create a GPM search criteria object
+        $GpmSearchCriteria = $GPM.CreateSearchCriteria()
 
+        #Configure search critera for SOM links against a GPO
+        $GpmSearchCriteria.Add($Constants.SearchPropertySOMLinks, $Constants.SearchOpContains, $GPO)
 
-		#Configure search critera for SOM links against a GPO
-		$GpmSearchCriteria.Add($Constants.SearchPropertySOMLinks,$Constants.SearchOpContains,$GPO)
+        #Perform the search
+        $SOMs = $GpmDomain.SearchSOMs($GpmSearchCriteria) + $GpmSites.SearchSites($GpmSearchCriteria)
 
+        #Empty the SomPath variable
+        $SomInfo = $Null
 
-		#Perform the search
-		$SOMs = $GpmDomain.SearchSOMs($GpmSearchCriteria) + $GpmSites.SearchSites($GpmSearchCriteria)
+        #Loop through any SOMs returned and write them to a variable
+        foreach ($SOM in $SOMs) {
 
+            #Capture the SOM Distinguished Name
+            $SomDN = $SOM.Path
 
-		#Empty the SomPath variable
-		$SomInfo = $Null
+            #Capture Block Inheritance state
+            $SomInheritance = $SOM.GPOInheritanceBlocked
 
-		
-		#Loop through any SOMs returned and write them to a variable
-		foreach ($SOM in $SOMs) {
+            #Get GPO Link information for the SOM
+            $GpoLinks = $SOM.GetGPOLinks()
 
-			#Capture the SOM Distinguished Name
-			$SomDN = $SOM.Path
-
-		
-			#Capture Block Inheritance state
-			$SomInheritance = $SOM.GPOInheritanceBlocked
-
-		
-			#Get GPO Link information for the SOM
-			$GpoLinks = $SOM.GetGPOLinks()
-
-
-				#Loop through the GPO Link information and match info that relates to our current GPO
-				foreach ($GpoLink in $GpoLinks) {
+            #Loop through the GPO Link information and match info that relates to our current GPO
+            foreach ($GpoLink in $GpoLinks) {
 				
-					if ($GpoLink.GPOID -eq $GpoID) {
+                if ($GpoLink.GPOID -eq $GpoID) {
 
-						#Capture the GPO link status
-						$LinkEnabled = $GpoLink.Enabled
-
-
-						#Capture the GPO precedence order
-						$LinkOrder = $GpoLink.SOMLinkOrder
+                    #Capture the GPO link status
+                    $LinkEnabled = $GpoLink.Enabled
 
 
-						#Capture Enforced state
-						$LinkEnforced = $GpoLink.Enforced
+                    #Capture the GPO precedence order
+                    $LinkOrder = $GpoLink.SOMLinkOrder
 
 
-					}   #end of if ($GpoLink.GPOID -eq $GpoID)
+                    #Capture Enforced state
+                    $LinkEnforced = $GpoLink.Enforced
 
 
-				}   #end of foreach ($GpoLink in $GpoLinks)
+                }   #end of if ($GpoLink.GPOID -eq $GpoID)
 
 
-			#Append the SOM DN, link status, link order and Block Inheritance info to $SomInfo
-			[Array]$SomInfo += "$SomDN`:$SomInheritance`:$LinkEnabled`:$LinkOrder`:$LinkEnforced"
+            }   #end of foreach ($GpoLink in $GpoLinks)
+
+
+            #Append the SOM DN, link status, link order and Block Inheritance info to $SomInfo
+            [Array]$SomInfo += "$SomDN`:$SomInheritance`:$LinkEnabled`:$LinkOrder`:$LinkEnforced"
 	
 	
-		}   #end of foreach ($SOM in $SOMs)...
-
+        }   #end of foreach ($SOM in $SOMs)...
 
         ##Obtain WMI Filter path using Get-GPO
         $Wmifilter = (Get-GPO -Guid $GpoGuid -Domain $DomainFQDN).WMifilter.Path
@@ -350,17 +325,15 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
         #$WMifilter = ($Wmifilter -split "`"")[1]
         $WMifilter = ($Wmifilter -split '"')[1]
 
-
-
         #Add selected GPO properties to a custom GPO object
         $GpoInfo = [PSCustomObject]@{
 
-                BackupGuid = $BackupGuid
-                Name = $GpoName
-                GpoGuid = $GpoGuid
-                SOMs = $SomInfo
-                DomainDN = $DomainDN
-                Wmifilter = $Wmifilter
+            BackupGuid = $BackupGuid
+            Name       = $GpoName
+            GpoGuid    = $GpoGuid
+            SOMs       = $SomInfo
+            DomainDN   = $DomainDN
+            Wmifilter  = $Wmifilter
         
         }   #end of $Properties...
 
@@ -371,14 +344,13 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
 
     }   #end of foreach ($Backup in $Backups)...
 
-
-
     #####################
     ##BACKUP WMI FILTERS
     #Connect to the Active Directory to get details of the WMI filters
-    $Wmifilters = Get-ADObject -Filter 'objectClass -eq "msWMI-Som"' `                               -Properties msWMI-Author, msWMI-ID, msWMI-Name, msWMI-Parm1, msWMI-Parm2 `                               -Server $DomainFQDN `                               -ErrorAction SilentlyContinue
-
-
+    $Wmifilters = Get-ADObject -Filter 'objectClass -eq "msWMI-Som"' `
+        -Properties msWMI-Author, msWMI-ID, msWMI-Name, msWMI-Parm1, msWMI-Parm2 `
+        -Server $DomainFQDN `
+        -ErrorAction SilentlyContinue
 
     ######################
     ##CREATE REPORT FILES
@@ -417,34 +389,32 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
         $CustomSOMs = $CustomGPO.SOMs
 
 
-            #Loop through any SOMs returned
-            foreach ($CustomSOM in $CustomSOMs) {
+        #Loop through any SOMs returned
+        foreach ($CustomSOM in $CustomSOMs) {
 
-                #Append the SOM path to our CSV line
-                $CSVLine += "`"$CustomSOM`","
+            #Append the SOM path to our CSV line
+            $CSVLine += "`"$CustomSOM`","
 
          
-           }   #end of foreach ($CustomSOM in $CustomSOMs)...
+        }   #end of foreach ($CustomSOM in $CustomSOMs)...
 
 
-       #Write the newly constructed CSV line to the report
-       Add-Content -Path $SOMReportCSV -Value $CSVLine
+        #Write the newly constructed CSV line to the report
+        Add-Content -Path $SOMReportCSV -Value $CSVLine
 
 
-       ##HTML settings report stuff
-	   #Remove invalid characters from GPO display name
-	   $GpoCleanedName = $CustomGPO.Name -replace "[^1-9a-zA-Z_]", "_"
+        ##HTML settings report stuff
+        #Remove invalid characters from GPO display name
+        $GpoCleanedName = $CustomGPO.Name -replace "[^1-9a-zA-Z_]", "_"
 	
-       #Create path to html file
-	   $ReportPath = "$SubBackupFolder\$HtmlReports\$($CustomGPO.BackupGuid)___$($CustomGPO.GpoGuid)__$($GpoCleanedName).html"
+        #Create path to html file
+        $ReportPath = "$SubBackupFolder\$HtmlReports\$($CustomGPO.BackupGuid)___$($CustomGPO.GpoGuid)__$($GpoCleanedName).html"
 	
-       #Create GPO report
-       Get-GPOReport -Guid $CustomGPO.GpoGuid -Path $ReportPath -ReportType HTML 
+        #Create GPO report
+        Get-GPOReport -Guid $CustomGPO.GpoGuid -Path $ReportPath -ReportType HTML 
 
 
     }   #end of foreach ($CustomGPO in $TotalGPOs)...
-
-
 
     ###########
     ##MIGTABLE
@@ -459,26 +429,27 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
 
 
         #Connect to the backup directory
-        $GpmBackupDir = $GPM.GetBackUpDir($SubBackupFolder)
+        $GpmBackupDir = $GPM.GetBackUpDir($SubBackupFolder)
+
 
         #Reset the GPM search criterea
         $GpmSearchCriteria = $GPM.CreateSearchCriteria()
 
 
         #Configure search critera for the most recent backup
-        $GpmSearchCriteria.Add($Constants.SearchPropertyBackupMostRecent,$Constants.SearchOpEquals,$True)
+        $GpmSearchCriteria.Add($Constants.SearchPropertyBackupMostRecent, $Constants.SearchOpEquals, $True)
    
 
         #Get GPO information
         $BackedUpGPOs = $GpmBackupDir.SearchBackups($GpmSearchCriteria)
 
 
-            #Add the information to our migration table
-            foreach ($BackedUpGPO in $BackedUpGPOs) {
+        #Add the information to our migration table
+        foreach ($BackedUpGPO in $BackedUpGPOs) {
 
-                $MigrationTable.Add($Constants.ProcessSecurity,$BackedUpGPO)
+            $MigrationTable.Add($Constants.ProcessSecurity, $BackedUpGPO)
         
-            }   #end of foreach ($BackedUpGPO in $BackedUpGPOs)...
+        }   #end of foreach ($BackedUpGPO in $BackedUpGPOs)...
 
 
         #Save the migration table
