@@ -184,9 +184,6 @@ if ((Test-Path -Path $SubBackupFolder) -and (Test-Path -Path "$SubBackupFolder\$
     #Obtain the forest FQDN
     $ForestFQDN = $TargetForestRootDomain.DNSRoot
 
-    #Obtain the forest DN
-    $ForestDN = $TargetForestRootDomain.DistinguishedName    
-
     #Create an empty array for our backups
     $Backups = @()
 
